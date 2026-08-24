@@ -9,6 +9,9 @@ db.sqlite3
 staticfiles/
 media/
 
+# Node (Tailwind CSS build only - see package.json)
+node_modules/
+
 # Editors / OS
 .vscode/
 .idea/

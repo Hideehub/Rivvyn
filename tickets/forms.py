@@ -8,9 +8,9 @@ class TicketForm(forms.ModelForm):
         model = Ticket
         fields = ['subject', 'description']
         widgets = {
-            'subject': forms.TextInput(attrs={'class': 'form-control', 'placeholder': "What's going on?"}),
+            'subject': forms.TextInput(attrs={'class': 'field-input', 'placeholder': "What's going on?"}),
             'description': forms.Textarea(attrs={
-                'class': 'form-control',
+                'class': 'field-input',
                 'rows': 6,
                 'placeholder': 'Give us as much detail as you can - steps to reproduce, error messages, etc.',
             }),

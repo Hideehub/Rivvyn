@@ -2,36 +2,41 @@
 {% load ticket_extras %}
 {% block title %}{{ ticket.subject }} - Rivyn{% endblock %}
 {% block content %}
-<div class="rivyn-ticket-detail">
-    <a href="{% url 'tickets:list' %}" class="rivyn-back-link">&larr; Back to my tickets</a>
-    <div class="rivyn-card">
-        <h2>{{ ticket.subject }}</h2>
-        <p class="mb-3">
-            <span class="badge rivyn-badge rivyn-badge-status">{{ ticket.get_status_display }}</span>
-            {% if ticket.category %}
-                <span class="badge rivyn-badge rivyn-badge-category">{{ ticket.get_category_display }}</span>
-            {% endif %}
-            {% if ticket.urgency %}
-                <span class="badge rivyn-badge {{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }} urgency</span>
-            {% endif %}
-        </p>
-        <p>{{ ticket.description|linebreaks }}</p>
+<a href="{% url 'tickets:list' %}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-blue-600">
+    &larr; Back to my tickets
+</a>
 
-        {% if not ticket.category and not ticket.urgency %}
-        <p class="rivyn-mock-note">Automatic triage hasn't run for this ticket yet.</p>
-        {% elif ai_triage_mock %}
-        <p class="rivyn-mock-note">Auto-triage shown above used local demo mode (no Anthropic API key configured).</p>
+<div class="card mt-4 max-w-2xl p-8">
+    <h1 class="text-2xl font-bold tracking-tight">{{ ticket.subject }}</h1>
+
+    <div class="mt-3 flex flex-wrap gap-2">
+        <span class="{{ ticket.status|status_badge_class }}">{{ ticket.get_status_display }}</span>
+        {% if ticket.category %}
+            <span class="badge-category">{{ ticket.get_category_display }}</span>
         {% endif %}
-
-        {% if notes %}
-        <h4 class="mt-4 mb-3" style="font-size:1.1rem;">Updates</h4>
-        {% for note in notes %}
-        <div class="rivyn-note">
-            <small>{{ note.author }} &middot; {{ note.created_at|date:"M j, Y g:i A" }}</small>
-            <p class="mb-0">{{ note.content|linebreaks }}</p>
-        </div>
-        {% endfor %}
+        {% if ticket.urgency %}
+            <span class="{{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }} urgency</span>
         {% endif %}
     </div>
+
+    <p class="mt-5 whitespace-pre-line text-base text-slate-700">{{ ticket.description }}</p>
+
+    {% if not ticket.category and not ticket.urgency %}
+    <p class="mt-4 text-xs italic text-slate-400">Automatic triage hasn't run for this ticket yet.</p>
+    {% elif ai_triage_mock %}
+    <p class="mt-4 text-xs italic text-slate-400">Auto-triage shown above used local demo mode (no Anthropic API key configured).</p>
+    {% endif %}
+
+    {% if notes %}
+    <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Updates</h2>
+    <div class="mt-3 space-y-3">
+        {% for note in notes %}
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p class="text-xs text-slate-500">{{ note.author }} &middot; {{ note.created_at|date:"M j, Y g:i A" }}</p>
+            <p class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ note.content }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

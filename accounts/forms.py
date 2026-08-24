@@ -18,7 +18,7 @@ class CustomerSignUpForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs['class'] = 'form-control'
+            field.widget.attrs['class'] = 'field-input'
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -30,9 +30,9 @@ class CustomerSignUpForm(UserCreationForm):
 
 
 class StyledAuthenticationForm(AuthenticationForm):
-    """Django's login form with Bootstrap widget classes applied."""
+    """Django's login form with the app's field-input styling applied."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs['class'] = 'form-control'
+            field.widget.attrs['class'] = 'field-input'

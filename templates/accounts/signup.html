@@ -1,16 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}Sign up - Rivyn{% endblock %}
 {% block content %}
-<div class="rivyn-auth-wrap">
-    <div class="rivyn-card">
-        <h2>Create your account</h2>
-        <form method="post">
+<div class="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center">
+    <div class="card p-8">
+        <h1 class="text-xl font-semibold">Create your account</h1>
+        <p class="mt-1 text-sm text-slate-500">Sign up to submit and track support tickets.</p>
+
+        <form method="post" class="mt-6 space-y-4">
             {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit" class="btn btn-primary w-100 mt-2">Sign up</button>
+            {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="field-errors">{{ error }}</p>{% endfor %}
+            </div>
+            {% endfor %}
+            {% for error in form.non_field_errors %}<p class="field-errors">{{ error }}</p>{% endfor %}
+            <button type="submit" class="btn-primary btn-block">Sign up</button>
         </form>
-        <p class="mt-3 mb-0 text-center">
-            <a href="{% url 'login' %}">Already have an account? Log in</a>
+
+        <p class="mt-6 text-center text-sm text-slate-500">
+            Already have an account? <a href="{% url 'login' %}" class="font-medium text-blue-600 hover:text-blue-700">Log in</a>
         </p>
     </div>
 </div>

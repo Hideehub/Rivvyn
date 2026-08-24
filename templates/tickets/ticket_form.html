@@ -1,13 +1,22 @@
 {% extends 'base.html' %}
 {% block title %}Submit a ticket - Rivyn{% endblock %}
 {% block content %}
-<div class="rivyn-auth-wrap">
-    <div class="rivyn-card" style="max-width: 34rem;">
-        <h2>Submit a ticket</h2>
-        <form method="post">
+<div class="mx-auto max-w-xl">
+    <div class="card p-8">
+        <h1 class="text-xl font-semibold">Submit a ticket</h1>
+        <p class="mt-1 text-sm text-slate-500">Tell us what's going on — we'll triage it automatically.</p>
+
+        <form method="post" class="mt-6 space-y-4">
             {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit" class="btn btn-primary w-100 mt-2">Submit</button>
+            {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="field-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="field-errors">{{ error }}</p>{% endfor %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn-primary btn-block">Submit</button>
         </form>
     </div>
 </div>
