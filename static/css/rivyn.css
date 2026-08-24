@@ -2,16 +2,17 @@
     --rivyn-primary: #6366f1;
     --rivyn-primary-dark: #4f46e5;
     --rivyn-primary-deep: #4338ca;
-    --rivyn-accent: #ec4899;
-    --rivyn-ink: #1e1b2e;
+    --rivyn-accent: #22d3ee;
+    --rivyn-violet: #8b5cf6;
+    --rivyn-ink: #181622;
     --rivyn-muted: #6b7280;
-    --rivyn-bg: #f5f4fb;
+    --rivyn-bg: #f3f4fa;
     --rivyn-surface: #ffffff;
     --rivyn-surface-muted: #f4f2fb;
     --rivyn-border: #e6e3f3;
     --rivyn-card-shadow: 0 12px 32px -8px rgba(79, 70, 229, 0.16), 0 2px 6px rgba(30, 27, 46, 0.05);
-    --rivyn-font-heading: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --rivyn-font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --rivyn-font-heading: 'Space Grotesk', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    --rivyn-font-body: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 html {
@@ -19,16 +20,38 @@ html {
 }
 
 body {
+    position: relative;
     color: var(--rivyn-ink);
     font-family: var(--rivyn-font-body);
     min-height: 100vh;
     background-color: var(--rivyn-bg);
-    background-image:
-        radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.20), transparent 42%),
-        radial-gradient(circle at 88% 4%, rgba(236, 72, 153, 0.16), transparent 40%),
-        radial-gradient(circle at 50% 100%, rgba(79, 70, 229, 0.14), transparent 55%);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
+    background-image: radial-gradient(rgba(30, 27, 46, 0.08) 1px, transparent 1px);
+    background-size: 26px 26px;
+    isolation: isolate;
+}
+
+/* Animated aurora glow, fixed behind all content, under the dot grid */
+.rivyn-bg-fx {
+    position: fixed;
+    inset: -15%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(32% 28% at 18% 22%, rgba(99, 102, 241, 0.38), transparent 70%),
+        radial-gradient(30% 26% at 82% 12%, rgba(34, 211, 238, 0.30), transparent 70%),
+        radial-gradient(36% 32% at 55% 92%, rgba(139, 92, 246, 0.32), transparent 70%);
+    filter: blur(70px);
+    animation: rivyn-aurora 22s ease-in-out infinite alternate;
+}
+
+@keyframes rivyn-aurora {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(3%, -4%, 0) scale(1.1); }
+    100% { transform: translate3d(-3%, 3%, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rivyn-bg-fx { animation: none; }
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -38,11 +61,11 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Navbar */
 .navbar.rivyn-navbar {
-    background-color: rgba(255, 255, 255, 0.78) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background-color: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
     border-bottom: 1px solid rgba(230, 227, 243, 0.7);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 4px 20px rgba(79, 70, 229, 0.06);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 4px 20px rgba(79, 70, 229, 0.08);
 }
 
 .rivyn-navbar .navbar-brand {
