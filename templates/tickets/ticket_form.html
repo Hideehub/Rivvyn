@@ -1,10 +1,14 @@
 {% extends 'base.html' %}
 {% block title %}Submit a ticket - Rivyn{% endblock %}
 {% block content %}
-<h2>Submit a ticket</h2>
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Submit</button>
-</form>
+<div class="rivyn-auth-wrap">
+    <div class="rivyn-card" style="max-width: 34rem;">
+        <h2>Submit a ticket</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-primary w-100 mt-2">Submit</button>
+        </form>
+    </div>
+</div>
 {% endblock %}

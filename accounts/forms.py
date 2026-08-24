@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 from .models import User
 
@@ -15,6 +15,11 @@ class CustomerSignUpForm(UserCreationForm):
         model = User
         fields = ('username', 'email')
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.role = User.Role.CUSTOMER
@@ -22,3 +27,12 @@ class CustomerSignUpForm(UserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class StyledAuthenticationForm(AuthenticationForm):
+    """Django's login form with Bootstrap widget classes applied."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'

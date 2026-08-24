@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Home - Rivyn{% endblock %}
 {% block content %}
-<h2>Welcome, {{ user.username }}</h2>
-<p>You're logged in as <strong>{{ user.get_role_display }}</strong>.</p>
-<p class="text-muted">The agent dashboard will live here (step 6).</p>
+<div class="rivyn-card" style="max-width: 34rem;">
+    <h2>Welcome, {{ user.username }}</h2>
+    <p class="text-muted mb-0">You're logged in as <strong>{{ user.get_role_display }}</strong>. The agent dashboard is coming next.</p>
+</div>
 {% endblock %}

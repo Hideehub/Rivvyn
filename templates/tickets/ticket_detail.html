@@ -1,22 +1,37 @@
 {% extends 'base.html' %}
+{% load ticket_extras %}
 {% block title %}{{ ticket.subject }} - Rivyn{% endblock %}
 {% block content %}
-<p><a href="{% url 'tickets:list' %}">&larr; Back to my tickets</a></p>
-<h2>{{ ticket.subject }}</h2>
-<p>
-    <span class="badge bg-secondary">{{ ticket.get_status_display }}</span>
-    {% if ticket.category %}<span class="badge bg-info text-dark">{{ ticket.get_category_display }}</span>{% endif %}
-    {% if ticket.urgency %}<span class="badge bg-warning text-dark">{{ ticket.get_urgency_display }}</span>{% endif %}
-</p>
-<p>{{ ticket.description|linebreaks }}</p>
+<div class="rivyn-ticket-detail">
+    <a href="{% url 'tickets:list' %}" class="rivyn-back-link">&larr; Back to my tickets</a>
+    <div class="rivyn-card">
+        <h2>{{ ticket.subject }}</h2>
+        <p class="mb-3">
+            <span class="badge rivyn-badge rivyn-badge-status">{{ ticket.get_status_display }}</span>
+            {% if ticket.category %}
+                <span class="badge rivyn-badge rivyn-badge-category">{{ ticket.get_category_display }}</span>
+            {% endif %}
+            {% if ticket.urgency %}
+                <span class="badge rivyn-badge {{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }} urgency</span>
+            {% endif %}
+        </p>
+        <p>{{ ticket.description|linebreaks }}</p>
 
-{% if notes %}
-<h4 class="mt-4">Updates</h4>
-{% for note in notes %}
-<div class="border rounded p-2 mb-2">
-    <small class="text-muted">{{ note.author }} &middot; {{ note.created_at|date:"M j, Y g:i A" }}</small>
-    <p class="mb-0">{{ note.content|linebreaks }}</p>
+        {% if not ticket.category and not ticket.urgency %}
+        <p class="rivyn-mock-note">Automatic triage hasn't run for this ticket yet.</p>
+        {% elif ai_triage_mock %}
+        <p class="rivyn-mock-note">Auto-triage shown above used local demo mode (no Anthropic API key configured).</p>
+        {% endif %}
+
+        {% if notes %}
+        <h4 class="mt-4 mb-3" style="font-size:1.1rem;">Updates</h4>
+        {% for note in notes %}
+        <div class="rivyn-note">
+            <small>{{ note.author }} &middot; {{ note.created_at|date:"M j, Y g:i A" }}</small>
+            <p class="mb-0">{{ note.content|linebreaks }}</p>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
 </div>
-{% endfor %}
-{% endif %}
 {% endblock %}

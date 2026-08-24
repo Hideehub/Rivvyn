@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView
@@ -58,4 +59,5 @@ class TicketDetailView(CustomerRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['notes'] = self.object.notes.filter(is_internal=False)
+        context['ai_triage_mock'] = settings.AI_TRIAGE_MOCK
         return context

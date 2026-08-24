@@ -1,34 +1,52 @@
 {% extends 'base.html' %}
+{% load ticket_extras %}
 {% block title %}My tickets - Rivyn{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="rivyn-page-header">
     <h2>My tickets</h2>
     <a href="{% url 'tickets:create' %}" class="btn btn-primary">New ticket</a>
 </div>
 {% if tickets %}
-<table class="table">
-    <thead>
-        <tr>
-            <th>Subject</th>
-            <th>Status</th>
-            <th>Category</th>
-            <th>Urgency</th>
-            <th>Submitted</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for ticket in tickets %}
-        <tr>
-            <td><a href="{% url 'tickets:detail' ticket.pk %}">{{ ticket.subject }}</a></td>
-            <td>{{ ticket.get_status_display }}</td>
-            <td>{{ ticket.get_category_display|default:"—" }}</td>
-            <td>{{ ticket.get_urgency_display|default:"—" }}</td>
-            <td>{{ ticket.created_at|date:"M j, Y g:i A" }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="rivyn-ticket-table">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Category</th>
+                <th>Urgency</th>
+                <th>Submitted</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ticket in tickets %}
+            <tr>
+                <td><a href="{% url 'tickets:detail' ticket.pk %}">{{ ticket.subject }}</a></td>
+                <td><span class="badge rivyn-badge rivyn-badge-status">{{ ticket.get_status_display }}</span></td>
+                <td>
+                    {% if ticket.category %}
+                        <span class="badge rivyn-badge rivyn-badge-category">{{ ticket.get_category_display }}</span>
+                    {% else %}
+                        <span class="text-muted">&mdash;</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ticket.urgency %}
+                        <span class="badge rivyn-badge {{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }}</span>
+                    {% else %}
+                        <span class="text-muted">&mdash;</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted">{{ ticket.created_at|date:"M j, Y g:i A" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% else %}
-<p>You haven't submitted any tickets yet.</p>
+<div class="rivyn-empty-state">
+    <p class="mb-3">You haven't submitted any tickets yet.</p>
+    <a href="{% url 'tickets:create' %}" class="btn btn-primary">Submit your first ticket</a>
+</div>
 {% endif %}
 {% endblock %}
