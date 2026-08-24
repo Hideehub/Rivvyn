@@ -16,7 +16,7 @@ class SignUpTests(TestCase):
         user = User.objects.get(username='carol')
         self.assertEqual(user.role, User.Role.CUSTOMER)
         self.assertTrue(user.is_customer)
-        self.assertRedirects(response, reverse('home'))
+        self.assertRedirects(response, reverse('tickets:list'))
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
 
     def test_signup_cannot_set_role_via_post_data(self):
@@ -36,11 +36,11 @@ class HomeViewTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertRedirects(response, f"{reverse('login')}?next={reverse('home')}")
 
-    def test_customer_sees_ticket_submission_placeholder(self):
+    def test_customer_redirected_to_ticket_list(self):
         user = User.objects.create_user(username='carol', password='pw', role=User.Role.CUSTOMER)
         self.client.force_login(user)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'Ticket submission')
+        self.assertRedirects(response, reverse('tickets:list'))
 
     def test_agent_sees_dashboard_placeholder(self):
         agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)

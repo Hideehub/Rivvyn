@@ -1,5 +1,6 @@
 from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, TemplateView
 
@@ -18,7 +19,12 @@ class SignUpView(CreateView):
 
 
 class HomeView(LoginRequiredMixin, TemplateView):
-    """Landing page after login. Replaced by the real ticket list /
-    agent dashboard redirect once those views exist (steps 4 and 6)."""
+    """Landing page after login. Customers land on their ticket list;
+    agents see a placeholder until the real dashboard exists (step 6)."""
 
     template_name = 'accounts/home.html'
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_customer:
+            return redirect('tickets:list')
+        return super().get(request, *args, **kwargs)

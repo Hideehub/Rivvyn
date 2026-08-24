@@ -3,9 +3,5 @@
 {% block content %}
 <h2>Welcome, {{ user.username }}</h2>
 <p>You're logged in as <strong>{{ user.get_role_display }}</strong>.</p>
-{% if user.is_agent %}
 <p class="text-muted">The agent dashboard will live here (step 6).</p>
-{% else %}
-<p class="text-muted">Ticket submission will live here (step 4).</p>
-{% endif %}
 {% endblock %}
