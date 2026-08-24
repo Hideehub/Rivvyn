@@ -176,3 +176,10 @@ REST_FRAMEWORK = {
 # Anthropic API (used by tickets.services for AI triage — see step 5)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 ANTHROPIC_MODEL = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-5')
+
+# When no API key is configured, ticket triage falls back to a local
+# keyword-based stub (see tickets.services) so the app's flow can be
+# exercised without an Anthropic account or spending anything. Adding a
+# real ANTHROPIC_API_KEY switches this off automatically; set AI_TRIAGE_MOCK
+# explicitly to override either way.
+AI_TRIAGE_MOCK = env_bool('AI_TRIAGE_MOCK', default=not bool(ANTHROPIC_API_KEY))

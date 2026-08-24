@@ -5,6 +5,8 @@ import anthropic
 from django.conf import settings
 from pydantic import BaseModel, Field
 
+from .models import Ticket
+
 logger = logging.getLogger(__name__)
 
 TRIAGE_SYSTEM_PROMPT = """You are a support ticket triage assistant for Rivyn, a small \
@@ -37,14 +39,23 @@ class TriageError(Exception):
 
 
 def triage_ticket(ticket):
-    """Call the Anthropic API to classify `ticket` and draft a first reply.
+    """Classify `ticket` and draft a first reply, setting category/urgency/
+    urgency_reason/draft_reply on the given instance (not saved here — the
+    caller decides when to persist) and returning it.
 
-    On success, sets category/urgency/urgency_reason/draft_reply on the given
-    ticket instance (not saved here — the caller decides when to persist) and
-    returns it. Raises TriageError on any failure; callers decide whether to
-    save the ticket without triage data, surface an error, or let the agent
-    retry via "Regenerate AI suggestion".
+    Calls the Anthropic API unless settings.AI_TRIAGE_MOCK is set (the
+    default when no ANTHROPIC_API_KEY is configured), in which case a local
+    keyword-based stub is used instead — see _mock_triage_ticket. Raises
+    TriageError on any failure; callers decide whether to save the ticket
+    without triage data, surface an error, or let the agent retry via
+    "Regenerate AI suggestion".
     """
+    if settings.AI_TRIAGE_MOCK:
+        return _mock_triage_ticket(ticket)
+    return _live_triage_ticket(ticket)
+
+
+def _live_triage_ticket(ticket):
     if not settings.ANTHROPIC_API_KEY:
         raise TriageError('ANTHROPIC_API_KEY is not configured.')
 
@@ -83,4 +94,54 @@ def triage_ticket(ticket):
     ticket.urgency = result.urgency
     ticket.urgency_reason = result.urgency_reason
     ticket.draft_reply = result.draft_reply
+    return ticket
+
+
+_MOCK_CATEGORY_KEYWORDS = {
+    Ticket.Category.BILLING: ('bill', 'invoice', 'charge', 'refund', 'payment', 'subscription', 'price'),
+    Ticket.Category.BUG: ('bug', 'error', 'crash', 'broken', "doesn't work", 'not working', 'fails', 'exception'),
+    Ticket.Category.FEATURE_REQUEST: ('feature', 'request', 'would be nice', 'suggestion', 'please add', 'wish'),
+    Ticket.Category.ACCOUNT: ('password', 'log in', 'login', 'account', 'locked out', '2fa', 'sign in'),
+}
+
+_MOCK_URGENCY_KEYWORDS = {
+    Ticket.Urgency.CRITICAL: (
+        'down', 'outage', 'urgent', 'critical', 'data loss', 'security', 'asap',
+        "can't access", 'cannot access', 'losing money',
+    ),
+    Ticket.Urgency.HIGH: ('blocked', 'broken', 'error', 'crash', 'important', 'not working'),
+    Ticket.Urgency.LOW: ('minor', 'small', 'cosmetic', 'no rush', 'when you get a chance'),
+}
+
+_MOCK_URGENCY_REASONS = {
+    Ticket.Urgency.CRITICAL: 'Language suggests the customer is fully blocked or facing a security/data issue.',
+    Ticket.Urgency.HIGH: 'The ticket describes a clear error or broken functionality.',
+    Ticket.Urgency.MEDIUM: 'No strong urgency signals were found; defaulting to standard priority.',
+    Ticket.Urgency.LOW: "The customer's language suggests this is minor or non-blocking.",
+}
+
+
+def _match_keyword_map(text, keyword_map, default):
+    for value, keywords in keyword_map.items():
+        if any(keyword in text for keyword in keywords):
+            return value
+    return default
+
+
+def _mock_triage_ticket(ticket):
+    """Offline stand-in for the Anthropic call (see settings.AI_TRIAGE_MOCK):
+    a simple keyword match against the subject/description, so the ticket
+    flow can be demoed without an Anthropic account."""
+    text = f'{ticket.subject} {ticket.description}'.lower()
+
+    ticket.category = _match_keyword_map(text, _MOCK_CATEGORY_KEYWORDS, default=Ticket.Category.OTHER)
+    ticket.urgency = _match_keyword_map(text, _MOCK_URGENCY_KEYWORDS, default=Ticket.Urgency.MEDIUM)
+    ticket.urgency_reason = _MOCK_URGENCY_REASONS[ticket.urgency]
+    ticket.draft_reply = (
+        f'Hi, thanks for reaching out about "{ticket.subject}". '
+        f"We've logged this as a {ticket.get_category_display().lower()} issue and "
+        f'will follow up shortly.\n\n- The Rivyn Support Team'
+    )
+
+    logger.info('Used mock AI triage for a ticket (no ANTHROPIC_API_KEY configured).')
     return ticket

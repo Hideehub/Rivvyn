@@ -121,7 +121,7 @@ class TriageServiceTests(TestCase):
         response.parsed_output = TicketTriageResult(**defaults)
         return response
 
-    @override_settings(ANTHROPIC_API_KEY='sk-ant-test-key')
+    @override_settings(AI_TRIAGE_MOCK=False, ANTHROPIC_API_KEY='sk-ant-test-key')
     @patch('tickets.services.anthropic.Anthropic')
     def test_triage_ticket_sets_fields_on_success(self, mock_anthropic_cls):
         mock_client = mock_anthropic_cls.return_value
@@ -136,13 +136,13 @@ class TriageServiceTests(TestCase):
         self.assertTrue(ticket.urgency_reason)
         self.assertTrue(ticket.draft_reply)
 
-    @override_settings(ANTHROPIC_API_KEY='')
+    @override_settings(AI_TRIAGE_MOCK=False, ANTHROPIC_API_KEY='')
     def test_triage_ticket_requires_api_key(self):
         ticket = Ticket(subject='x', description='y')
         with self.assertRaises(TriageError):
             triage_ticket(ticket)
 
-    @override_settings(ANTHROPIC_API_KEY='sk-ant-test-key')
+    @override_settings(AI_TRIAGE_MOCK=False, ANTHROPIC_API_KEY='sk-ant-test-key')
     @patch('tickets.services.anthropic.Anthropic')
     def test_triage_ticket_wraps_connection_errors(self, mock_anthropic_cls):
         import anthropic
@@ -154,7 +154,7 @@ class TriageServiceTests(TestCase):
         with self.assertRaises(TriageError):
             triage_ticket(ticket)
 
-    @override_settings(ANTHROPIC_API_KEY='sk-ant-test-key')
+    @override_settings(AI_TRIAGE_MOCK=False, ANTHROPIC_API_KEY='sk-ant-test-key')
     @patch('tickets.services.anthropic.Anthropic')
     def test_triage_ticket_raises_when_unparseable(self, mock_anthropic_cls):
         mock_client = mock_anthropic_cls.return_value
@@ -165,3 +165,37 @@ class TriageServiceTests(TestCase):
         ticket = Ticket(subject='x', description='y')
         with self.assertRaises(TriageError):
             triage_ticket(ticket)
+
+
+class MockTriageTests(TestCase):
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_classifies_billing_and_low_urgency(self):
+        ticket = Ticket(
+            subject='Question about my invoice',
+            description='No rush, but can you clarify a charge on my last invoice?',
+        )
+        result = triage_ticket(ticket)
+
+        self.assertIs(result, ticket)
+        self.assertEqual(ticket.category, Ticket.Category.BILLING)
+        self.assertEqual(ticket.urgency, Ticket.Urgency.LOW)
+        self.assertTrue(ticket.urgency_reason)
+        self.assertIn('Rivyn Support Team', ticket.draft_reply)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_classifies_critical_bug(self):
+        ticket = Ticket(
+            subject='Site is down',
+            description="This is urgent, I can't access my account at all, it's a total outage.",
+        )
+        result = triage_ticket(ticket)
+
+        self.assertEqual(result.urgency, Ticket.Urgency.CRITICAL)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_defaults_to_other_and_medium(self):
+        ticket = Ticket(subject='General question', description='Just wondering how this works.')
+        result = triage_ticket(ticket)
+
+        self.assertEqual(result.category, Ticket.Category.OTHER)
+        self.assertEqual(result.urgency, Ticket.Urgency.MEDIUM)
