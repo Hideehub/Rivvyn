@@ -1,3 +1,6 @@
+import logging
+
+from django.contrib import messages
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView
 
@@ -5,6 +8,9 @@ from accounts.mixins import CustomerRequiredMixin
 
 from .forms import TicketForm
 from .models import Ticket
+from .services import TriageError, triage_ticket
+
+logger = logging.getLogger(__name__)
 
 
 class TicketCreateView(CustomerRequiredMixin, CreateView):
@@ -13,8 +19,20 @@ class TicketCreateView(CustomerRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.customer = self.request.user
-        # AI triage call (category/urgency/draft_reply) is wired in step 5.
-        return super().form_valid(form)
+        response = super().form_valid(form)
+
+        try:
+            triage_ticket(self.object)
+            self.object.save()
+        except TriageError:
+            logger.warning('AI triage failed for ticket %s', self.object.pk, exc_info=True)
+            messages.warning(
+                self.request,
+                "Your ticket was submitted, but automatic triage didn't complete. "
+                "An agent will review it shortly.",
+            )
+
+        return response
 
     def get_success_url(self):
         return reverse('tickets:detail', args=[self.object.pk])
