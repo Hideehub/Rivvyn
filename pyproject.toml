@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 120
+extend-exclude = ["venv", "node_modules", "**/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+exclude = ["venv/", "node_modules/", "migrations/"]
+
+[tool.django-stubs]
+django_settings_module = "rivyn.settings"

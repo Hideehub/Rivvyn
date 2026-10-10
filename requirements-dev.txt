@@ -1,0 +1,11 @@
+# Dev-only tools (lint + typecheck). Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+ast_serialize==0.12.1
+django-stubs==6.1.2
+django-stubs-ext==6.1.2
+librt==0.16.0
+mypy==2.4.0
+mypy_extensions==1.1.0
+pathspec==1.1.1
+ruff==0.17.0
+types-PyYAML==6.0.12.20260906

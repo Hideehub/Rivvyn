@@ -167,6 +167,62 @@ class TriageServiceTests(TestCase):
             triage_ticket(ticket)
 
 
+class TriageServiceHTTPTests(TestCase):
+    """Runs the real SDK `messages.parse()` path with only the HTTP layer faked,
+    so SDK/pydantic incompatibilities fail here instead of in production."""
+
+    @override_settings(
+        AI_TRIAGE_MOCK=False,
+        ANTHROPIC_API_KEY='sk-ant-test-key',
+        ANTHROPIC_MODEL='claude-sonnet-5-5',
+    )
+    def test_live_triage_parses_response_into_triage_result(self):
+        import json
+
+        import anthropic
+        import httpx2
+
+        sent = {}
+
+        def handler(request):
+            sent['body'] = json.loads(request.content)
+            output = {
+                'category': 'billing',
+                'urgency': 'high',
+                'urgency_reason': 'Customer was charged twice.',
+                'draft_reply': 'Thanks for flagging this - we are looking into the duplicate charge.',
+            }
+            return httpx2.Response(200, json={
+                'id': 'msg_test',
+                'type': 'message',
+                'role': 'assistant',
+                'model': sent['body']['model'],
+                'content': [{'type': 'text', 'text': json.dumps(output)}],
+                'stop_reason': 'end_turn',
+                'stop_sequence': None,
+                'usage': {'input_tokens': 10, 'output_tokens': 10},
+            })
+
+        real_client_cls = anthropic.Anthropic
+
+        def client_with_fake_transport(**kwargs):
+            return real_client_cls(
+                **kwargs,
+                http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(handler)),
+            )
+
+        ticket = Ticket(subject='Charged twice', description='My card was billed twice this month.')
+        with patch('tickets.services.anthropic.Anthropic', side_effect=client_with_fake_transport):
+            triage_ticket(ticket)
+
+        self.assertEqual(sent['body']['model'], 'claude-sonnet-5-5')
+        self.assertEqual(sent['body']['output_config']['format']['type'], 'json_schema')
+        self.assertEqual(ticket.category, 'billing')
+        self.assertEqual(ticket.urgency, 'high')
+        self.assertEqual(ticket.urgency_reason, 'Customer was charged twice.')
+        self.assertIn('duplicate charge', ticket.draft_reply)
+
+
 class MockTriageTests(TestCase):
     @override_settings(AI_TRIAGE_MOCK=True)
     def test_mock_triage_classifies_billing_and_low_urgency(self):
