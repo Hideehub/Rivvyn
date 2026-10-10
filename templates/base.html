@@ -19,6 +19,9 @@
         </a>
         {% if user.is_authenticated %}
         <div class="flex items-center gap-3">
+            {% if user.is_agent %}
+            <a href="{% url 'tickets:agent_queue' %}" class="text-sm font-medium text-slate-600 hover:text-blue-600">Queue</a>
+            {% endif %}
             <span class="hidden items-center gap-2 text-sm text-slate-600 sm:flex">
                 <span class="font-medium text-slate-900">{{ user.username }}</span>
                 <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">{{ user.get_role_display }}</span>

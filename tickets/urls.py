@@ -8,4 +8,7 @@ urlpatterns = [
     path('', views.TicketListView.as_view(), name='list'),
     path('new/', views.TicketCreateView.as_view(), name='create'),
     path('<int:pk>/', views.TicketDetailView.as_view(), name='detail'),
+    path('agent/', views.AgentTicketQueueView.as_view(), name='agent_queue'),
+    path('agent/<int:pk>/', views.AgentTicketDetailView.as_view(), name='agent_detail'),
+    path('agent/<int:pk>/status/', views.AgentTicketStatusUpdateView.as_view(), name='agent_status'),
 ]
