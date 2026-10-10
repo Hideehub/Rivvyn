@@ -488,3 +488,79 @@ class AgentTicketStatusUpdateViewTests(TestCase):
 
         self.assertContains(response, f'action="{self.url}"')
         self.assertContains(response, '<option value="resolved" selected>Resolved</option>', html=True)
+
+
+class AgentTicketNoteCreateViewTests(TestCase):
+    def setUp(self):
+        self.agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)
+        self.carol = User.objects.create_user(username='carol', password='pw', role=User.Role.CUSTOMER)
+        self.ticket = Ticket.objects.create(subject='Broken export', description='...', customer=self.carol)
+        self.url = reverse('tickets:agent_note_create', args=[self.ticket.pk])
+        self.detail_url = reverse('tickets:agent_detail', args=[self.ticket.pk])
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.post(self.url, {'content': 'Hello'})
+        self.assertRedirects(response, f"{reverse('login')}?next={self.url}", fetch_redirect_response=False)
+        self.assertFalse(TicketNote.objects.exists())
+
+    def test_customer_forbidden(self):
+        self.client.force_login(self.carol)
+        response = self.client.post(self.url, {'content': 'Hello'})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(TicketNote.objects.exists())
+
+    def test_agent_adds_public_note(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(self.url, {'content': 'We are looking into it.'}, follow=True)
+
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, 'Note added.')
+        note = TicketNote.objects.get()
+        self.assertEqual(note.ticket, self.ticket)
+        self.assertEqual(note.author, self.agent)
+        self.assertEqual(note.content, 'We are looking into it.')
+        self.assertFalse(note.is_internal)
+
+    def test_agent_adds_internal_note(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(self.url, {'content': 'Probably the CSV bug.', 'is_internal': 'on'}, follow=True)
+
+        self.assertContains(response, 'Internal note added.')
+        self.assertTrue(TicketNote.objects.get().is_internal)
+
+    def test_blank_note_rejected(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(self.url, {'content': '   '}, follow=True)
+
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, 'The note was empty. Nothing was added.')
+        self.assertFalse(TicketNote.objects.exists())
+
+    def test_missing_ticket_returns_404(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(reverse('tickets:agent_note_create', args=[self.ticket.pk + 1]), {'content': 'x'})
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_not_allowed(self):
+        self.client.force_login(self.agent)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_detail_page_shows_note_form(self):
+        self.client.force_login(self.agent)
+        response = self.client.get(self.detail_url)
+        self.assertContains(response, f'action="{self.url}"')
+        self.assertContains(response, 'name="is_internal"')
+
+    def test_customer_sees_only_public_notes_added_by_agent(self):
+        self.client.force_login(self.agent)
+        self.client.post(self.url, {'content': 'Public reply for Carol'})
+        self.client.post(self.url, {'content': 'Agents-only investigation', 'is_internal': 'on'})
+
+        agent_view = self.client.get(self.detail_url)
+        self.assertContains(agent_view, 'Public reply for Carol')
+        self.assertContains(agent_view, 'Agents-only investigation')
+
+        self.client.force_login(self.carol)
+        customer_view = self.client.get(reverse('tickets:detail', args=[self.ticket.pk]))
+        self.assertContains(customer_view, 'Public reply for Carol')
+        self.assertNotContains(customer_view, 'Agents-only investigation')

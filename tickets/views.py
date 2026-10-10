@@ -3,13 +3,13 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.db.models import Case, IntegerField, Value, When
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from accounts.mixins import AgentRequiredMixin, CustomerRequiredMixin
 
-from .forms import TicketForm, TicketQueueFilterForm, TicketStatusForm
+from .forms import TicketForm, TicketNoteForm, TicketQueueFilterForm, TicketStatusForm
 from .models import Ticket
 from .services import TriageError, triage_ticket
 
@@ -115,6 +115,7 @@ class AgentTicketDetailView(AgentRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['notes'] = self.object.notes.select_related('author')
         context['status_form'] = TicketStatusForm(instance=self.object)
+        context['note_form'] = TicketNoteForm()
         context['ai_triage_mock'] = settings.AI_TRIAGE_MOCK
         return context
 
@@ -137,3 +138,28 @@ class AgentTicketStatusUpdateView(AgentRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse('tickets:agent_detail', args=[self.object.pk])
+
+
+class AgentTicketNoteCreateView(AgentRequiredMixin, CreateView):
+    """POST-only: the note form lives on the agent detail page."""
+
+    form_class = TicketNoteForm
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        self.ticket = get_object_or_404(Ticket, pk=kwargs['pk'])
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        form.instance.ticket = self.ticket
+        form.instance.author = self.request.user
+        response = super().form_valid(form)
+        messages.success(self.request, 'Internal note added.' if self.object.is_internal else 'Note added.')
+        return response
+
+    def form_invalid(self, form):
+        messages.error(self.request, 'The note was empty. Nothing was added.')
+        return redirect('tickets:agent_detail', pk=self.ticket.pk)
+
+    def get_success_url(self):
+        return reverse('tickets:agent_detail', args=[self.ticket.pk])

@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Ticket
+from .models import Ticket, TicketNote
 
 
 class TicketForm(forms.ModelForm):
@@ -37,4 +37,18 @@ class TicketStatusForm(forms.ModelForm):
         fields = ['status']
         widgets = {
             'status': forms.Select(attrs={'class': 'field-input'}),
+        }
+
+
+class TicketNoteForm(forms.ModelForm):
+    class Meta:
+        model = TicketNote
+        fields = ['content', 'is_internal']
+        labels = {
+            'content': 'Add a note',
+            'is_internal': 'Internal (agents only, hidden from the customer)',
+        }
+        widgets = {
+            'content': forms.Textarea(attrs={'class': 'field-input', 'rows': 4}),
+            'is_internal': forms.CheckboxInput(attrs={'class': 'h-4 w-4 rounded border-slate-300 text-blue-600'}),
         }
