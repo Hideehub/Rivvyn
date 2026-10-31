@@ -42,8 +42,15 @@ class HomeViewTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertRedirects(response, reverse('tickets:list'))
 
-    def test_agent_sees_dashboard_placeholder(self):
+    def test_agent_redirected_to_queue(self):
         agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)
         self.client.force_login(agent)
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'agent dashboard')
+        self.assertRedirects(response, reverse('tickets:agent_queue'))
+
+    def test_agent_login_lands_on_queue(self):
+        User.objects.create_user(username='dave', password='S0meStrongPass!23', role=User.Role.AGENT)
+        response = self.client.post(
+            reverse('login'), {'username': 'dave', 'password': 'S0meStrongPass!23'}, follow=True,
+        )
+        self.assertRedirects(response, reverse('tickets:agent_queue'))
