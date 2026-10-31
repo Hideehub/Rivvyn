@@ -17,8 +17,7 @@
             <tr class="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <th scope="col" class="px-4 py-3">Subject</th>
                 <th scope="col" class="px-4 py-3">Status</th>
-                <th scope="col" class="hidden px-4 py-3 sm:table-cell">Category</th>
-                <th scope="col" class="px-4 py-3">Urgency</th>
+                <th scope="col" class="px-4 py-3">Category</th>
                 <th scope="col" class="hidden px-4 py-3 md:table-cell">Submitted</th>
             </tr>
         </thead>
@@ -33,16 +32,9 @@
                 <td class="px-4 py-3">
                     <span class="{{ ticket.status|status_badge_class }}">{{ ticket.get_status_display }}</span>
                 </td>
-                <td class="hidden px-4 py-3 sm:table-cell">
+                <td class="px-4 py-3">
                     {% if ticket.category %}
                         <span class="badge-category">{{ ticket.get_category_display }}</span>
-                    {% else %}
-                        <span class="text-slate-400">&mdash;</span>
-                    {% endif %}
-                </td>
-                <td class="px-4 py-3">
-                    {% if ticket.urgency %}
-                        <span class="{{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }}</span>
                     {% else %}
                         <span class="text-slate-400">&mdash;</span>
                     {% endif %}
@@ -65,7 +57,7 @@
         </svg>
     </span>
     <p class="mt-4 text-sm font-medium text-slate-900">No tickets yet</p>
-    <p class="mt-1 text-sm text-slate-500">Once you submit a ticket, it'll show up here with its status and priority.</p>
+    <p class="mt-1 text-sm text-slate-500">Once you submit a ticket, it'll show up here with its status.</p>
     <a href="{% url 'tickets:create' %}" class="btn-primary mt-6">Submit your first ticket</a>
 </div>
 {% endif %}

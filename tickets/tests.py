@@ -113,6 +113,49 @@ class TicketDetailViewTests(TestCase):
         self.assertNotContains(response, 'Internal note')
 
 
+@override_settings(AI_TRIAGE_MOCK=True)
+class CustomerHidesTriageInternalsTests(TestCase):
+    """Customers see subject, status, category and public notes; urgency and the
+    demo-mode notice are for agents only."""
+
+    def setUp(self):
+        self.carol = User.objects.create_user(username='carol', password='pw', role=User.Role.CUSTOMER)
+        self.ticket = Ticket.objects.create(
+            subject='Charged twice',
+            description='My deposit was taken twice.',
+            customer=self.carol,
+            category=Ticket.Category.PAYMENTS_REFUNDS,
+            urgency=Ticket.Urgency.CRITICAL,
+            urgency_reason='Customer lost money.',
+            draft_reply='Sorry about the double charge.',
+        )
+        self.client.force_login(self.carol)
+
+    def _assert_no_triage_internals(self, response):
+        self.assertContains(response, 'Charged twice')
+        self.assertContains(response, 'Payments &amp; refunds')
+        self.assertContains(response, 'Open')
+        self.assertNotContains(response, 'badge-urgency')
+        self.assertNotContains(response, 'Critical')
+        self.assertNotContains(response, 'Urgency')
+        self.assertNotContains(response, 'Customer lost money.')
+        self.assertNotContains(response, 'Sorry about the double charge.')
+        self.assertNotContains(response, 'demo mode')
+
+    def test_ticket_list_hides_urgency_and_demo_notice(self):
+        self._assert_no_triage_internals(self.client.get(reverse('tickets:list')))
+
+    def test_ticket_detail_hides_urgency_and_demo_notice(self):
+        self._assert_no_triage_internals(self.client.get(reverse('tickets:detail', args=[self.ticket.pk])))
+
+    def test_agent_detail_still_shows_urgency_and_demo_notice(self):
+        agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)
+        self.client.force_login(agent)
+        response = self.client.get(reverse('tickets:agent_detail', args=[self.ticket.pk]))
+        self.assertContains(response, 'Critical urgency')
+        self.assertContains(response, 'demo mode')
+
+
 class TriageServiceTests(TestCase):
     def _fake_response(self, **overrides):
         defaults = dict(

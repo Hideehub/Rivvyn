@@ -14,18 +14,9 @@
         {% if ticket.category %}
             <span class="badge-category">{{ ticket.get_category_display }}</span>
         {% endif %}
-        {% if ticket.urgency %}
-            <span class="{{ ticket.urgency|urgency_badge_class }}">{{ ticket.get_urgency_display }} urgency</span>
-        {% endif %}
     </div>
 
     <p class="mt-5 whitespace-pre-line text-base text-slate-700">{{ ticket.description }}</p>
-
-    {% if not ticket.category and not ticket.urgency %}
-    <p class="mt-4 text-xs italic text-slate-400">Automatic triage hasn't run for this ticket yet.</p>
-    {% elif ai_triage_mock %}
-    <p class="mt-4 text-xs italic text-slate-400">Auto-triage shown above used local demo mode (no Anthropic API key configured).</p>
-    {% endif %}
 
     {% if notes %}
     <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Updates</h2>
