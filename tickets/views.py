@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from accounts.mixins import AgentRequiredMixin, CustomerRequiredMixin
 
@@ -137,6 +137,25 @@ class AgentTicketStatusUpdateView(AgentRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse('tickets:agent_detail', args=[self.object.pk])
+
+
+class AgentTicketRegenerateTriageView(AgentRequiredMixin, View):
+    """POST-only: re-runs AI triage and overwrites the ticket's AI fields. On failure
+    nothing is saved, so the previous suggestion (if any) stays."""
+
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        ticket = get_object_or_404(Ticket, pk=kwargs['pk'])
+        try:
+            triage_ticket(ticket)
+        except TriageError as exc:
+            logger.warning('AI triage regeneration failed for ticket %s', ticket.pk, exc_info=True)
+            messages.error(request, f"Couldn't regenerate the AI suggestion: {exc}")
+        else:
+            ticket.save(update_fields=['category', 'urgency', 'urgency_reason', 'draft_reply', 'updated_at'])
+            messages.success(request, 'AI suggestion regenerated.')
+        return redirect('tickets:agent_detail', pk=ticket.pk)
 
 
 class AgentTicketNoteCreateView(AgentRequiredMixin, CreateView):

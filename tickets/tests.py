@@ -681,3 +681,105 @@ class CategoryMigrationTests(TransactionTestCase):
                 'booking': 'other',
             },
         )
+
+
+class AgentTicketRegenerateTriageViewTests(TestCase):
+    def setUp(self):
+        self.agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)
+        self.carol = User.objects.create_user(username='carol', password='pw', role=User.Role.CUSTOMER)
+        self.ticket = Ticket.objects.create(
+            subject='Refund for my booking',
+            description='The business cancelled my appointment.',
+            customer=self.carol,
+            category=Ticket.Category.OTHER,
+            urgency=Ticket.Urgency.LOW,
+            urgency_reason='Old reason.',
+            draft_reply='Old draft.',
+        )
+        self.url = reverse('tickets:agent_regenerate_triage', args=[self.ticket.pk])
+        self.detail_url = reverse('tickets:agent_detail', args=[self.ticket.pk])
+
+    def _assert_unchanged(self):
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.category, Ticket.Category.OTHER)
+        self.assertEqual(self.ticket.urgency, Ticket.Urgency.LOW)
+        self.assertEqual(self.ticket.urgency_reason, 'Old reason.')
+        self.assertEqual(self.ticket.draft_reply, 'Old draft.')
+
+    @patch('tickets.views.triage_ticket')
+    def test_anonymous_redirected_to_login(self, mock_triage):
+        response = self.client.post(self.url)
+        self.assertRedirects(response, f"{reverse('login')}?next={self.url}", fetch_redirect_response=False)
+        mock_triage.assert_not_called()
+
+    @patch('tickets.views.triage_ticket')
+    def test_customer_forbidden(self, mock_triage):
+        self.client.force_login(self.carol)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 403)
+        mock_triage.assert_not_called()
+        self._assert_unchanged()
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_agent_regenerates_and_overwrites_suggestion(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(self.url, follow=True)
+
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, 'AI suggestion regenerated.')
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.category, Ticket.Category.PAYMENTS_REFUNDS)
+        self.assertNotEqual(self.ticket.urgency_reason, 'Old reason.')
+        self.assertIn('booking-platform Support Team', self.ticket.draft_reply)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_agent_can_triage_untriaged_ticket(self):
+        untriaged = Ticket.objects.create(subject='Need to reschedule', description='...', customer=self.carol)
+        self.client.force_login(self.agent)
+        self.client.post(reverse('tickets:agent_regenerate_triage', args=[untriaged.pk]))
+
+        untriaged.refresh_from_db()
+        self.assertEqual(untriaged.category, Ticket.Category.BOOKING_ISSUES)
+        self.assertTrue(untriaged.urgency)
+
+    @patch(
+        'tickets.views.triage_ticket',
+        side_effect=TriageError('AI triage is temporarily rate-limited. Try again shortly.'),
+    )
+    def test_failure_keeps_previous_suggestion_and_shows_error(self, mock_triage):
+        self.client.force_login(self.agent)
+        with self.assertLogs('tickets.views', level='WARNING'):
+            response = self.client.post(self.url, follow=True)
+
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, "Couldn&#x27;t regenerate the AI suggestion")
+        self.assertContains(response, 'temporarily rate-limited')
+        self.assertNotContains(response, 'AI suggestion regenerated.')
+        self._assert_unchanged()
+
+    @patch('tickets.views.triage_ticket')
+    def test_does_not_change_status(self, mock_triage):
+        self.ticket.status = Ticket.Status.IN_PROGRESS
+        self.ticket.save()
+        self.client.force_login(self.agent)
+        self.client.post(self.url)
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, Ticket.Status.IN_PROGRESS)
+
+    def test_missing_ticket_returns_404(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(reverse('tickets:agent_regenerate_triage', args=[9999]))
+        self.assertEqual(response.status_code, 404)
+
+    @patch('tickets.views.triage_ticket')
+    def test_get_not_allowed(self, mock_triage):
+        self.client.force_login(self.agent)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        mock_triage.assert_not_called()
+
+    def test_detail_page_shows_regenerate_button(self):
+        self.client.force_login(self.agent)
+        response = self.client.get(self.detail_url)
+        self.assertContains(response, f'action="{self.url}"')
+        self.assertContains(response, 'Regenerate AI suggestion')
