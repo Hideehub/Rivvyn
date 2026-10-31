@@ -9,10 +9,28 @@ from .models import Ticket
 
 logger = logging.getLogger(__name__)
 
-TRIAGE_SYSTEM_PROMPT = """You are a support ticket triage assistant for Rivyn, a small \
-software company. Given a customer's support ticket, classify it and draft a first reply.
+TRIAGE_SYSTEM_PROMPT = """You are a support ticket triage assistant for Rivyn, the support \
+desk for booking-platform. Given a customer's support ticket, classify it and draft a first reply.
 
-Categorize into exactly one of: Billing, Bug, Feature Request, Account, Other.
+booking-platform is an appointment booking service for clinics, salons and consultants. \
+Tickets come from end customers who booked an appointment with one of those businesses. \
+Customers book without an account: they choose a service, staff member and time, and a \
+private booking link is their only way back to the booking. Many services require a deposit \
+paid through Paystack. The slot is held for 15 minutes while the customer pays, and the \
+booking is confirmed only once the payment is received. Customers get a confirmation email, \
+and a reminder 24 hours before the appointment (no reminder if they booked less than 24 hours \
+ahead). Times are shown in the business's local timezone. Customers cannot cancel or \
+reschedule themselves; only the business can. Deposits are refundable, but refunds are \
+processed by hand, so never promise a refund date or timeframe: say the support team will \
+follow up.
+
+Categorize into exactly one of:
+- Booking issues: holds, confirmations, cancellations, reschedules, missing emails, appointment times
+- Payments & refunds: deposits, charges, payment not confirmed, refunds
+- Account & login: a lost booking link, or trouble signing in to this support desk
+- Bug report: something on the site is broken or showing an error
+- Feature request
+- Other
 
 Assign urgency based on business impact and customer sentiment: Low, Medium, High, or \
 Critical. Critical is reserved for outages, data loss, security issues, or anything that \
@@ -20,10 +38,12 @@ completely blocks a customer from using the product.
 
 Write a short, professional draft reply (2-4 sentences) that acknowledges the issue and \
 sets expectations. Do not promise specific timelines or commitments an agent hasn't \
-approved. Sign off as "The Rivyn Support Team"."""
+approved. Sign off as "The booking-platform Support Team"."""
 
 # Kept in sync with tickets.models.Ticket.Category / Ticket.Urgency choices.
-_CategoryLiteral = Literal['billing', 'bug', 'feature_request', 'account', 'other']
+_CategoryLiteral = Literal[
+    'booking_issues', 'payments_refunds', 'account_login', 'bug_report', 'feature_request', 'other',
+]
 _UrgencyLiteral = Literal['low', 'medium', 'high', 'critical']
 
 
@@ -97,11 +117,16 @@ def _live_triage_ticket(ticket):
     return ticket
 
 
+# First match wins, so order matters: booking words appear in almost every ticket,
+# so that category is checked last ("refund for my booking" is a payments ticket).
 _MOCK_CATEGORY_KEYWORDS = {
-    Ticket.Category.BILLING: ('bill', 'invoice', 'charge', 'refund', 'payment', 'subscription', 'price'),
-    Ticket.Category.BUG: ('bug', 'error', 'crash', 'broken', "doesn't work", 'not working', 'fails', 'exception'),
-    Ticket.Category.FEATURE_REQUEST: ('feature', 'request', 'would be nice', 'suggestion', 'please add', 'wish'),
-    Ticket.Category.ACCOUNT: ('password', 'log in', 'login', 'account', 'locked out', '2fa', 'sign in'),
+    Ticket.Category.PAYMENTS_REFUNDS: ('deposit', 'refund', 'charge', 'paystack', 'payment', 'paid'),
+    Ticket.Category.ACCOUNT_LOGIN: ('password', 'log in', 'login', 'sign in', 'booking link', 'lost link'),
+    Ticket.Category.BUG_REPORT: ('bug', 'error', 'crash', 'broken', 'not working'),
+    Ticket.Category.FEATURE_REQUEST: ('feature', 'would be nice', 'please add', 'suggestion'),
+    Ticket.Category.BOOKING_ISSUES: (
+        'booking', 'appointment', 'cancel', 'reschedul', 'slot', 'reminder', 'confirmation',
+    ),
 }
 
 _MOCK_URGENCY_KEYWORDS = {
@@ -139,8 +164,8 @@ def _mock_triage_ticket(ticket):
     ticket.urgency_reason = _MOCK_URGENCY_REASONS[ticket.urgency]
     ticket.draft_reply = (
         f'Hi, thanks for reaching out about "{ticket.subject}". '
-        f"We've logged this as a {ticket.get_category_display().lower()} issue and "
-        f'will follow up shortly.\n\n- The Rivyn Support Team'
+        f"We've logged this under {ticket.get_category_display()} and "
+        f'will follow up shortly.\n\n- The booking-platform Support Team'
     )
 
     logger.info('Used mock AI triage for a ticket (no ANTHROPIC_API_KEY configured).')

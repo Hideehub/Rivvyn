@@ -1,7 +1,10 @@
 from datetime import timedelta
+from typing import get_args
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, override_settings
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,7 +34,7 @@ class TicketCreateViewTests(TestCase):
     @patch('tickets.views.triage_ticket')
     def test_submit_ticket_saves_triage_result(self, mock_triage):
         def fake_triage(ticket):
-            ticket.category = Ticket.Category.BUG
+            ticket.category = Ticket.Category.BUG_REPORT
             ticket.urgency = Ticket.Urgency.HIGH
             ticket.urgency_reason = 'Customer cannot log in at all.'
             ticket.draft_reply = 'Thanks for reporting this - looking into it now.'
@@ -44,7 +47,7 @@ class TicketCreateViewTests(TestCase):
             'description': 'I get an error when I try to log in.',
         })
         ticket = Ticket.objects.get(subject='Cannot log in')
-        self.assertEqual(ticket.category, Ticket.Category.BUG)
+        self.assertEqual(ticket.category, Ticket.Category.BUG_REPORT)
         self.assertEqual(ticket.urgency, Ticket.Urgency.HIGH)
         self.assertTrue(ticket.urgency_reason)
         self.assertTrue(ticket.draft_reply)
@@ -113,7 +116,7 @@ class TicketDetailViewTests(TestCase):
 class TriageServiceTests(TestCase):
     def _fake_response(self, **overrides):
         defaults = dict(
-            category='bug',
+            category='bug_report',
             urgency='high',
             urgency_reason='Customer cannot access the product at all.',
             draft_reply='Thanks for reaching out - we are looking into this right away.',
@@ -133,7 +136,7 @@ class TriageServiceTests(TestCase):
         result = triage_ticket(ticket)
 
         self.assertIs(result, ticket)
-        self.assertEqual(ticket.category, 'bug')
+        self.assertEqual(ticket.category, 'bug_report')
         self.assertEqual(ticket.urgency, 'high')
         self.assertTrue(ticket.urgency_reason)
         self.assertTrue(ticket.draft_reply)
@@ -189,7 +192,7 @@ class TriageServiceHTTPTests(TestCase):
         def handler(request):
             sent['body'] = json.loads(request.content)
             output = {
-                'category': 'billing',
+                'category': 'payments_refunds',
                 'urgency': 'high',
                 'urgency_reason': 'Customer was charged twice.',
                 'draft_reply': 'Thanks for flagging this - we are looking into the duplicate charge.',
@@ -218,8 +221,9 @@ class TriageServiceHTTPTests(TestCase):
             triage_ticket(ticket)
 
         self.assertEqual(sent['body']['model'], 'claude-sonnet-5-5')
+        self.assertIn('booking-platform', str(sent['body']['system']))
         self.assertEqual(sent['body']['output_config']['format']['type'], 'json_schema')
-        self.assertEqual(ticket.category, 'billing')
+        self.assertEqual(ticket.category, 'payments_refunds')
         self.assertEqual(ticket.urgency, 'high')
         self.assertEqual(ticket.urgency_reason, 'Customer was charged twice.')
         self.assertIn('duplicate charge', ticket.draft_reply)
@@ -227,7 +231,7 @@ class TriageServiceHTTPTests(TestCase):
 
 class MockTriageTests(TestCase):
     @override_settings(AI_TRIAGE_MOCK=True)
-    def test_mock_triage_classifies_billing_and_low_urgency(self):
+    def test_mock_triage_classifies_payments_and_low_urgency(self):
         ticket = Ticket(
             subject='Question about my invoice',
             description='No rush, but can you clarify a charge on my last invoice?',
@@ -235,10 +239,10 @@ class MockTriageTests(TestCase):
         result = triage_ticket(ticket)
 
         self.assertIs(result, ticket)
-        self.assertEqual(ticket.category, Ticket.Category.BILLING)
+        self.assertEqual(ticket.category, Ticket.Category.PAYMENTS_REFUNDS)
         self.assertEqual(ticket.urgency, Ticket.Urgency.LOW)
         self.assertTrue(ticket.urgency_reason)
-        self.assertIn('Rivyn Support Team', ticket.draft_reply)
+        self.assertIn('booking-platform Support Team', ticket.draft_reply)
 
     @override_settings(AI_TRIAGE_MOCK=True)
     def test_mock_triage_classifies_critical_bug(self):
@@ -257,6 +261,25 @@ class MockTriageTests(TestCase):
 
         self.assertEqual(result.category, Ticket.Category.OTHER)
         self.assertEqual(result.urgency, Ticket.Urgency.MEDIUM)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_payment_words_beat_booking_words(self):
+        ticket = Ticket(subject='Refund for my booking', description='The business cancelled my appointment.')
+        self.assertEqual(triage_ticket(ticket).category, Ticket.Category.PAYMENTS_REFUNDS)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_classifies_lost_booking_link_as_account(self):
+        ticket = Ticket(subject='Lost my booking link', description='I deleted the email with the link.')
+        self.assertEqual(triage_ticket(ticket).category, Ticket.Category.ACCOUNT_LOGIN)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_mock_triage_classifies_booking_issues(self):
+        ticket = Ticket(subject='Need to reschedule', description='Can my appointment move to Friday?')
+        self.assertEqual(triage_ticket(ticket).category, Ticket.Category.BOOKING_ISSUES)
+
+    def test_triage_result_categories_match_model_choices(self):
+        annotation = TicketTriageResult.model_fields['category'].annotation
+        self.assertEqual(set(get_args(annotation)), set(Ticket.Category.values))
 
 
 class AgentTicketQueueViewTests(TestCase):
@@ -339,20 +362,20 @@ class AgentTicketQueueViewTests(TestCase):
         self.assertEqual(self._subjects(response), ['Low one'])
 
     def test_filter_by_category(self):
-        self._ticket('Billing one', 10, category=Ticket.Category.BILLING)
-        self._ticket('Bug one', 5, category=Ticket.Category.BUG)
+        self._ticket('Billing one', 10, category=Ticket.Category.PAYMENTS_REFUNDS)
+        self._ticket('Bug one', 5, category=Ticket.Category.BUG_REPORT)
 
         self.client.force_login(self.agent)
-        response = self.client.get(self.url, {'category': 'bug'})
+        response = self.client.get(self.url, {'category': 'bug_report'})
 
         self.assertEqual(self._subjects(response), ['Bug one'])
 
     def test_invalid_filter_value_is_ignored(self):
-        self._ticket('Billing one', 10, category=Ticket.Category.BILLING)
-        self._ticket('Bug one', 5, category=Ticket.Category.BUG)
+        self._ticket('Billing one', 10, category=Ticket.Category.PAYMENTS_REFUNDS)
+        self._ticket('Bug one', 5, category=Ticket.Category.BUG_REPORT)
 
         self.client.force_login(self.agent)
-        response = self.client.get(self.url, {'status': 'not-a-status', 'category': 'bug'})
+        response = self.client.get(self.url, {'status': 'not-a-status', 'category': 'bug_report'})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._subjects(response), ['Bug one'])
@@ -373,7 +396,7 @@ class AgentTicketDetailViewTests(TestCase):
             subject='Charged twice',
             description='My card was billed twice.',
             customer=self.carol,
-            category=Ticket.Category.BILLING,
+            category=Ticket.Category.PAYMENTS_REFUNDS,
             urgency=Ticket.Urgency.HIGH,
             urgency_reason='Customer lost money.',
             draft_reply='Sorry about the double charge - we are on it.',
@@ -564,3 +587,54 @@ class AgentTicketNoteCreateViewTests(TestCase):
         customer_view = self.client.get(reverse('tickets:detail', args=[self.ticket.pk]))
         self.assertContains(customer_view, 'Public reply for Carol')
         self.assertNotContains(customer_view, 'Agents-only investigation')
+
+
+class CategoryMigrationTests(TransactionTestCase):
+    """0002 maps the old category values onto the booking-platform ones, and back."""
+
+    before = [('tickets', '0001_initial')]
+    after = [('tickets', '0002_rename_ticket_categories')]
+
+    def _migrate(self, targets):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(targets)
+        return executor.loader.project_state(targets).apps
+
+    def tearDown(self):
+        self._migrate(MigrationExecutor(connection).loader.graph.leaf_nodes())
+
+    def test_old_values_mapped_forward_and_back(self):
+        apps = self._migrate(self.before)
+        user = apps.get_model('accounts', 'User').objects.create(username='carol')
+        OldTicket = apps.get_model('tickets', 'Ticket')
+        for old in ['billing', 'account', 'bug', 'feature_request', 'other', '']:
+            OldTicket.objects.create(subject=old or 'untriaged', description='...', customer=user, category=old)
+
+        NewTicket = self._migrate(self.after).get_model('tickets', 'Ticket')
+        self.assertEqual(
+            dict(NewTicket.objects.values_list('subject', 'category')),
+            {
+                'billing': 'payments_refunds',
+                'account': 'account_login',
+                'bug': 'bug_report',
+                'feature_request': 'feature_request',
+                'other': 'other',
+                'untriaged': '',
+            },
+        )
+
+        NewTicket.objects.create(subject='booking', description='...', customer_id=user.pk, category='booking_issues')
+        OldTicket = self._migrate(self.before).get_model('tickets', 'Ticket')
+        self.assertEqual(
+            dict(OldTicket.objects.values_list('subject', 'category')),
+            {
+                'billing': 'billing',
+                'account': 'account',
+                'bug': 'bug',
+                'feature_request': 'feature_request',
+                'other': 'other',
+                'untriaged': '',
+                'booking': 'other',
+            },
+        )

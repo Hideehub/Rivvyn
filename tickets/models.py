@@ -10,10 +10,11 @@ class Ticket(models.Model):
         CLOSED = 'closed', 'Closed'
 
     class Category(models.TextChoices):
-        BILLING = 'billing', 'Billing'
-        BUG = 'bug', 'Bug'
-        FEATURE_REQUEST = 'feature_request', 'Feature Request'
-        ACCOUNT = 'account', 'Account'
+        BOOKING_ISSUES = 'booking_issues', 'Booking issues'
+        PAYMENTS_REFUNDS = 'payments_refunds', 'Payments & refunds'
+        ACCOUNT_LOGIN = 'account_login', 'Account & login'
+        BUG_REPORT = 'bug_report', 'Bug report'
+        FEATURE_REQUEST = 'feature_request', 'Feature request'
         OTHER = 'other', 'Other'
 
     class Urgency(models.TextChoices):
