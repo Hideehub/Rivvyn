@@ -9,6 +9,7 @@ full list of supported variables.
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,15 +24,18 @@ def env_bool(name, default=False):
     return value.strip().lower() in ('1', 'true', 'yes', 'on')
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Falls back to an insecure dev-only key so `manage.py` works out of the box
-# locally; production deployments must set DJANGO_SECRET_KEY.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-dev-only-change-me',
-)
+# Off unless DJANGO_DEBUG says otherwise, so a deploy that forgets the
+# variable never runs in debug mode. .env.example turns it on for local dev.
+DEBUG = env_bool('DJANGO_DEBUG', default=False)
 
-DEBUG = env_bool('DJANGO_DEBUG', default=True)
+# SECURITY WARNING: keep the secret key used in production secret!
+# Only debug mode may fall back to the insecure dev-only key; without debug a
+# missing key stops startup instead of signing sessions with a public value.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is off.')
+    SECRET_KEY = 'django-insecure-dev-only-change-me'
 
 ALLOWED_HOSTS = [
     host.strip()

@@ -1,13 +1,21 @@
 # Environment
 .env
+.env.*
+!.env.example
 venv*/
 __pycache__/
 *.pyc
 
 # Django
 db.sqlite3
+*.sqlite3
 staticfiles/
 media/
+*.log
+
+# Test coverage
+htmlcov/
+.coverage
 
 # Node (Tailwind CSS build only - see package.json)
 node_modules/
