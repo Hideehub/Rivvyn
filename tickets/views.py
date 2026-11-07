@@ -2,15 +2,17 @@ import logging
 
 from django.conf import settings
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.utils import timezone
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, View
 
 from accounts.mixins import AgentRequiredMixin, CustomerRequiredMixin
 
-from .forms import TicketForm, TicketNoteForm, TicketQueueFilterForm, TicketStatusForm
-from .models import Ticket
+from .forms import AgentReplyForm, TicketForm, TicketNoteForm, TicketQueueFilterForm, TicketStatusForm
+from .models import Ticket, TicketNote
 from .services import TriageError, triage_ticket
 
 logger = logging.getLogger(__name__)
@@ -115,6 +117,7 @@ class AgentTicketDetailView(AgentRequiredMixin, DetailView):
         context['notes'] = self.object.notes.select_related('author')
         context['status_form'] = TicketStatusForm(instance=self.object)
         context['note_form'] = TicketNoteForm()
+        context['reply_form'] = AgentReplyForm(initial={'content': self.object.draft_reply})
         context['ai_triage_mock'] = settings.AI_TRIAGE_MOCK
         return context
 
@@ -156,6 +159,39 @@ class AgentTicketRegenerateTriageView(AgentRequiredMixin, View):
             ticket.save(update_fields=['category', 'urgency', 'urgency_reason', 'draft_reply', 'updated_at'])
             messages.success(request, 'AI suggestion regenerated.')
         return redirect('tickets:agent_detail', pk=ticket.pk)
+
+
+class AgentTicketSendReplyView(AgentRequiredMixin, FormView):
+    """POST-only: sends the agent's (possibly edited) AI draft as a public note.
+    draft_reply is left as the AI wrote it, so regenerating never touches a sent reply.
+    An Open ticket moves to In Progress; any other status is left alone."""
+
+    form_class = AgentReplyForm
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        self.ticket = get_object_or_404(Ticket, pk=kwargs['pk'])
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            TicketNote.objects.create(
+                ticket=self.ticket,
+                author=self.request.user,
+                content=form.cleaned_data['content'],
+                is_internal=False,
+            )
+            # Conditional UPDATE: only an Open row changes, so a status another
+            # agent set in the meantime is never overwritten.
+            moved = Ticket.objects.filter(pk=self.ticket.pk, status=Ticket.Status.OPEN).update(
+                status=Ticket.Status.IN_PROGRESS, updated_at=timezone.now(),
+            )
+        messages.success(self.request, 'Reply sent. Status changed to In Progress.' if moved else 'Reply sent.')
+        return redirect('tickets:agent_detail', pk=self.ticket.pk)
+
+    def form_invalid(self, form):
+        messages.error(self.request, 'The reply was empty. Nothing was sent.')
+        return redirect('tickets:agent_detail', pk=self.ticket.pk)
 
 
 class AgentTicketNoteCreateView(AgentRequiredMixin, CreateView):

@@ -13,4 +13,5 @@ urlpatterns = [
     path('agent/<int:pk>/status/', views.AgentTicketStatusUpdateView.as_view(), name='agent_status'),
     path('agent/<int:pk>/notes/', views.AgentTicketNoteCreateView.as_view(), name='agent_note_create'),
     path('agent/<int:pk>/regenerate/', views.AgentTicketRegenerateTriageView.as_view(), name='agent_regenerate_triage'),
+    path('agent/<int:pk>/reply/', views.AgentTicketSendReplyView.as_view(), name='agent_send_reply'),
 ]

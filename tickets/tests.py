@@ -783,3 +783,117 @@ class AgentTicketRegenerateTriageViewTests(TestCase):
         response = self.client.get(self.detail_url)
         self.assertContains(response, f'action="{self.url}"')
         self.assertContains(response, 'Regenerate AI suggestion')
+
+
+class AgentTicketSendReplyViewTests(TestCase):
+    def setUp(self):
+        self.agent = User.objects.create_user(username='dave', password='pw', role=User.Role.AGENT)
+        self.carol = User.objects.create_user(username='carol', password='pw', role=User.Role.CUSTOMER)
+        self.ticket = Ticket.objects.create(
+            subject='Refund for my booking',
+            description='The business cancelled my appointment.',
+            customer=self.carol,
+            category=Ticket.Category.PAYMENTS_REFUNDS,
+            urgency=Ticket.Urgency.MEDIUM,
+            urgency_reason='Customer is waiting on money.',
+            draft_reply='AI draft: we will look into your refund.',
+        )
+        self.url = reverse('tickets:agent_send_reply', args=[self.ticket.pk])
+        self.detail_url = reverse('tickets:agent_detail', args=[self.ticket.pk])
+
+    def _send(self, content='Edited: your deposit refund is being arranged.', **kwargs):
+        return self.client.post(self.url, {'content': content}, **kwargs)
+
+    def test_anonymous_redirected_to_login(self):
+        response = self._send()
+        self.assertRedirects(response, f"{reverse('login')}?next={self.url}", fetch_redirect_response=False)
+        self.assertFalse(TicketNote.objects.exists())
+
+    def test_customer_forbidden(self):
+        self.client.force_login(self.carol)
+        response = self._send()
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(TicketNote.objects.exists())
+
+    def test_agent_sends_edited_reply_as_public_note(self):
+        self.client.force_login(self.agent)
+        response = self._send(follow=True)
+
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, 'Reply sent.')
+        note = TicketNote.objects.get()
+        self.assertEqual(note.ticket, self.ticket)
+        self.assertEqual(note.author, self.agent)
+        self.assertEqual(note.content, 'Edited: your deposit refund is being arranged.')
+        self.assertFalse(note.is_internal)
+
+    def test_draft_reply_is_not_changed_by_sending(self):
+        self.client.force_login(self.agent)
+        self._send()
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.draft_reply, 'AI draft: we will look into your refund.')
+
+    def test_empty_or_blank_reply_rejected(self):
+        self.client.force_login(self.agent)
+        for content in ['', '   \n  ']:
+            response = self._send(content, follow=True)
+            self.assertRedirects(response, self.detail_url)
+            self.assertContains(response, 'The reply was empty. Nothing was sent.')
+        self.assertFalse(TicketNote.objects.exists())
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, Ticket.Status.OPEN)
+
+    def test_open_ticket_moves_to_in_progress(self):
+        self.client.force_login(self.agent)
+        response = self._send(follow=True)
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, Ticket.Status.IN_PROGRESS)
+        self.assertContains(response, 'Reply sent. Status changed to In Progress.')
+
+    def test_resolved_ticket_stays_resolved(self):
+        self.ticket.status = Ticket.Status.RESOLVED
+        self.ticket.save()
+        self.client.force_login(self.agent)
+        response = self._send(follow=True)
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, Ticket.Status.RESOLVED)
+        self.assertNotContains(response, 'Status changed')
+        self.assertEqual(TicketNote.objects.count(), 1)
+
+    @override_settings(AI_TRIAGE_MOCK=True)
+    def test_regenerating_after_send_never_changes_sent_reply(self):
+        self.client.force_login(self.agent)
+        self._send()
+        self.client.post(reverse('tickets:agent_regenerate_triage', args=[self.ticket.pk]))
+
+        self.ticket.refresh_from_db()
+        self.assertNotEqual(self.ticket.draft_reply, 'AI draft: we will look into your refund.')
+        note = TicketNote.objects.get()
+        self.assertEqual(note.content, 'Edited: your deposit refund is being arranged.')
+        self.assertFalse(note.is_internal)
+
+    def test_customer_sees_sent_reply_on_ticket_page(self):
+        self.client.force_login(self.agent)
+        self._send()
+        self.client.force_login(self.carol)
+        response = self.client.get(reverse('tickets:detail', args=[self.ticket.pk]))
+        self.assertContains(response, 'Edited: your deposit refund is being arranged.')
+        self.assertNotContains(response, 'AI draft: we will look into your refund.')
+
+    def test_missing_ticket_returns_404(self):
+        self.client.force_login(self.agent)
+        response = self.client.post(reverse('tickets:agent_send_reply', args=[9999]), {'content': 'Hi'})
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_not_allowed(self):
+        self.client.force_login(self.agent)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_detail_page_prefills_textarea_with_draft(self):
+        self.client.force_login(self.agent)
+        response = self.client.get(self.detail_url)
+        self.assertContains(response, f'action="{self.url}"')
+        self.assertContains(response, 'Send reply to customer')
+        self.assertContains(response, '>\nAI draft: we will look into your refund.</textarea>')

@@ -40,6 +40,16 @@ class TicketStatusForm(forms.ModelForm):
         }
 
 
+class AgentReplyForm(forms.Form):
+    """The agent's edited copy of the AI draft. Sending it creates a public note;
+    Ticket.draft_reply itself is never written from this form."""
+
+    content = forms.CharField(
+        label='Reply to customer',
+        widget=forms.Textarea(attrs={'class': 'field-input', 'rows': 6}),
+    )
+
+
 class TicketNoteForm(forms.ModelForm):
     class Meta:
         model = TicketNote
